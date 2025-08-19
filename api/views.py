@@ -12,6 +12,7 @@ from django.utils.decorators import method_decorator
 from rest_framework.permissions import AllowAny
 from .models import *
 from .serializers import *
+from django.db import IntegrityError, transaction
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -49,34 +50,67 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
+@method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        # Puedes eliminar 'rol_int_id' del request, ya que lo asignaremos por defecto
-        request_data = request.data.copy()  # Hacer una copia del diccionario de datos
-        request_data['rol_int_id'] = 1  # Asignar el rol con ID 1 de forma predeterminada
-        
-        serializer = RegisterSerializer(data=request_data)
-        
+        data = request.data.copy()
+
+        # Rol por defecto 1 si no envían
+        data.setdefault('rol_int_id', 1)
+
+        # Normaliza email antes de cualquier cosa
+        email = (data.get('usu_txt_email') or '').strip().lower()
+        data['usu_txt_email'] = email
+
+        # Fail-fast: si ya existe, 409
+        if Usuario.objects.filter(usu_txt_email__iexact=email).exists():
+            return Response({
+                "status": "001",
+                "type": "warning",
+                "detail": "El correo ya está registrado.",
+                "results": {"usu_txt_email": ["El correo ya está registrado."]}
+            }, status=status.HTTP_409_CONFLICT)
+
+        serializer = RegisterSerializer(data=data)
+
         if serializer.is_valid():
-            # Hashear la contraseña antes de guardar
-            validated_data = serializer.validated_data
-            validated_data['usu_txt_password'] = make_password(validated_data['usu_txt_password'])
-            user = serializer.save()
+            try:
+                with transaction.atomic():
+                    user = serializer.save()
+            except IntegrityError:
+                # Respaldo por condición de carrera
+                return Response({
+                    "status": "001",
+                    "type": "warning",
+                    "detail": "El correo ya está registrado.",
+                    "results": {"usu_txt_email": ["El correo ya está registrado."]}
+                }, status=status.HTTP_409_CONFLICT)
+
             return Response({
                 "status": "000",
                 "type": "success",
                 "detail": f"Usuario {user.usu_txt_nombre} {user.usu_txt_apellidos} registrado correctamente",
                 "results": {}
             }, status=status.HTTP_201_CREATED)
-        else:
+
+        # Si el error viene por email duplicado vía UniqueValidator, devuelve 409
+        if 'usu_txt_email' in serializer.errors:
             return Response({
-                "status": "003",
-                "type": "error",
-                "detail": "Error en la validación",
+                "status": "001",
+                "type": "warning",
+                "detail": "El correo ya está registrado.",
                 "results": serializer.errors
-            }, status=status.HTTP_400_BAD_REQUEST)
+            }, status=status.HTTP_409_CONFLICT)
+
+        # Otros errores de validación
+        return Response({
+            "status": "003",
+            "type": "error",
+            "detail": "Error en la validación",
+            "results": serializer.errors
+        }, status=status.HTTP_400_BAD_REQUEST)
 
 @method_decorator(csrf_exempt, name='dispatch')
 class LoginView(APIView):
@@ -87,7 +121,7 @@ class LoginView(APIView):
         if serializer.is_valid():
             email = serializer.validated_data['usu_txt_email']
             password = serializer.validated_data['usu_txt_password']
-
+            print(email)
             try:
                 user = Usuario.objects.get(usu_txt_email=email)
                 if check_password(password, user.usu_txt_password):
