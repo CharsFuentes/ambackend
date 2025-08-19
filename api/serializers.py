@@ -1,6 +1,8 @@
 from rest_framework import serializers
 from .models import *
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth.hashers import make_password
+from rest_framework.validators import UniqueValidator
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
@@ -9,17 +11,40 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    # Unicidad de email con mensaje claro
+    usu_txt_email = serializers.EmailField(
+        validators=[UniqueValidator(
+            queryset=Usuario.objects.all(),
+            message="El correo ya está registrado."
+        )]
+    )
+    # FK por PK
+    rol_int_id = serializers.PrimaryKeyRelatedField(queryset=Rol.objects.all())
+    # password solo entrada
+    usu_txt_password = serializers.CharField(write_only=True, min_length=6)
+
     class Meta:
         model = Usuario
-        fields = ['usu_txt_nombre', 'usu_txt_apellidos', 'usu_txt_email', 'usu_txt_password', 'usu_txt_colegio', 'usu_txt_grado', 'rol_int_id']
+        fields = [
+            'usu_txt_nombre',
+            'usu_txt_apellidos',
+            'usu_txt_email',
+            'usu_txt_password',
+            'usu_txt_colegio',
+            'usu_txt_grado',
+            'rol_int_id',
+        ]
 
-    def validate_usu_txt_email(self, value):
-        if Usuario.objects.filter(usu_txt_email=value).exists():
-            raise serializers.ValidationError("El correo ya está registrado.")
-        return value
-    
+    # Normaliza email siempre (lowercase/trim)
+    def validate_usu_txt_email(self, value: str) -> str:
+        return value.strip().lower()
+
     def create(self, validated_data):
-        return Usuario.objects.create(**validated_data)
+        raw_password = validated_data.pop('usu_txt_password')
+        validated_data['usu_txt_password'] = make_password(raw_password)
+        # rol_int_id ya es instancia de Rol
+        user = Usuario.objects.create(**validated_data)
+        return user
     
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
