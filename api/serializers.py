@@ -77,10 +77,10 @@ class PreguntaSerializer(serializers.ModelSerializer):
         model = Pregunta
         fields = '__all__'
 
-class RespuestaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Respuesta
-        fields = '__all__'
+# class RespuestaSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Respuesta
+#         fields = '__all__'
 
 class IntentoExamenSerializer(serializers.ModelSerializer):
     class Meta:
@@ -96,3 +96,18 @@ class RespuestaUsuarioSerializer(serializers.ModelSerializer):
 class LoginSerializer(serializers.Serializer):
     usu_txt_email = serializers.EmailField()
     usu_txt_password = serializers.CharField()
+
+
+
+class RespuestaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Respuesta
+        fields = ['res_int_id', 'res_txt_texto', 'res_bol_es_correcta']
+
+class PreguntaConRespuestasSerializer(serializers.ModelSerializer):
+    # Sin related_name => reverso por defecto 'respuesta_set'
+    respuestas = RespuestaSerializer(source='respuesta_set', many=True, read_only=True)
+
+    class Meta:
+        model = Pregunta
+        fields = ['pre_int_id', 'pre_txt_texto', 'respuestas']

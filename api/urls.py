@@ -29,4 +29,6 @@ urlpatterns = [
     path('respuesta/<int:pk>/', views.RespuestaDetailView.as_view(), name='detalle-respuesta'),
 
     path('intentos/', views.IntentoExamenListCreateView.as_view(), name='lista-intentos'),
+    
+    path('cursos/preguntas/', views.PreguntasPorCursoPostView.as_view(), name='lista-de-cursos'),
 ]

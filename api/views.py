@@ -13,6 +13,9 @@ from rest_framework.permissions import AllowAny
 from .models import *
 from .serializers import *
 from django.db import IntegrityError, transaction
+from django.db.models import Prefetch
+# from rest_framework.permissions import IsAuthenticated
+from django.db.models.functions import Random
 
 @method_decorator(csrf_exempt, name='dispatch')
 class CustomTokenObtainPairView(TokenObtainPairView):
@@ -260,3 +263,77 @@ class RespuestaDetailView(generics.RetrieveUpdateDestroyAPIView):
 # Intentos
 class IntentoExamenListCreateView(generics.ListCreateAPIView):
     queryset = IntentoExamen.objects.all()
+
+
+class PreguntasPorCursoPostView(APIView):
+    """
+    POST /api/cursos/preguntas/
+    Body JSON:
+      {
+        "curso_id": <int>,     // requerido
+        "limit": 5,            // opcional (default 5, máx 50)
+        "random": true         // opcional (default true)
+      }
+
+    Respuesta:
+      {
+        "status": "000"|"003"|"004",
+        "type": "success"|"error",
+        "detail": "...",
+        "results": [ { pregunta+respuestas }, ... ]
+      }
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        curso_id = request.data.get('curso_id')
+        if not curso_id:
+            return Response({
+                "status": "003",
+                "type": "error",
+                "detail": "Falta el campo obligatorio 'curso_id'.",
+                "results": {}
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Verifica que exista el curso
+        if not Curso.objects.filter(cur_int_id=curso_id).exists():
+            return Response({
+                "status": "004",
+                "type": "error",
+                "detail": "Curso no encontrado.",
+                "results": {}
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Lee y sanea parámetros opcionales
+        try:
+            limit = int(request.data.get('limit', 5))
+        except (TypeError, ValueError):
+            limit = 5
+        limit = max(1, min(limit, 50))  # 1..50
+
+        random_flag = str(request.data.get('random', True)).lower() in ('1', 'true', 't', 'yes', 'y')
+
+        base_qs = Pregunta.objects.filter(cur_int_id_id=curso_id)
+        respuestas_qs = Respuesta.objects.order_by('res_int_id')
+
+        if random_flag:
+            preguntas_qs = (
+                base_qs
+                .order_by(Random())  # aleatorio en DB
+                .prefetch_related(Prefetch('respuesta_set', queryset=respuestas_qs))
+            )[:limit]
+        else:
+            preguntas_qs = (
+                base_qs
+                .order_by('pre_int_id')
+                .prefetch_related(Prefetch('respuesta_set', queryset=respuestas_qs))
+            )[:limit]
+
+        data = PreguntaConRespuestasSerializer(preguntas_qs, many=True).data
+
+        return Response({
+            "status": "000",
+            "type": "success",
+            "detail": "Preguntas obtenidas correctamente.",
+            "results": data
+        }, status=status.HTTP_200_OK)
