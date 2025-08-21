@@ -337,3 +337,4 @@ class PreguntasPorCursoPostView(APIView):
             "detail": "Preguntas obtenidas correctamente.",
             "results": data
         }, status=status.HTTP_200_OK)
+    
