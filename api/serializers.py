@@ -11,11 +11,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    # Unicidad de email con mensaje claro
-    usu_txt_email = serializers.EmailField()
-    # FK por PK
+    usu_txt_email = serializers.EmailField()  # <-- sin UniqueValidator
     rol_int_id = serializers.PrimaryKeyRelatedField(queryset=Rol.objects.all())
-    # password solo entrada
     usu_txt_password = serializers.CharField(write_only=True, min_length=6)
 
     class Meta:
@@ -30,16 +27,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             'rol_int_id',
         ]
 
-    # Normaliza email siempre (lowercase/trim)
     def validate_usu_txt_email(self, value: str) -> str:
         return value.strip().lower()
 
     def create(self, validated_data):
         raw_password = validated_data.pop('usu_txt_password')
         validated_data['usu_txt_password'] = make_password(raw_password)
-        # rol_int_id ya es instancia de Rol
-        user = Usuario.objects.create(**validated_data)
-        return user
+        return Usuario.objects.create(**validated_data)
+
     
 class UsuarioSerializer(serializers.ModelSerializer):
     class Meta:
