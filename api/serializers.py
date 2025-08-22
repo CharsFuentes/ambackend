@@ -12,12 +12,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     # Unicidad de email con mensaje claro
-    usu_txt_email = serializers.EmailField(
-        validators=[UniqueValidator(
-            queryset=Usuario.objects.all(),
-            message="El correo ya está registrado."
-        )]
-    )
+    usu_txt_email = serializers.EmailField()
     # FK por PK
     rol_int_id = serializers.PrimaryKeyRelatedField(queryset=Rol.objects.all())
     # password solo entrada
